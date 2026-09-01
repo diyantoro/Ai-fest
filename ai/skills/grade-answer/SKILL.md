@@ -1,3 +1,8 @@
+---
+name: grade-answer
+description: Menilai jawaban kuis hasil generate-quiz dengan skor dan umpan balik per soal, disimpan di data/grades/. Dipakai saat user mengumpulkan jawaban kuis.
+---
+
 # Skill: Grade Answer
 
 Repository: StudyBuddy — AI Personal Learning Agent

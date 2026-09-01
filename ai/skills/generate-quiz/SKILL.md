@@ -1,3 +1,8 @@
+---
+name: generate-quiz
+description: Membuat kuis pilihan ganda dari hasil ingest, teks, atau ringkasan untuk latihan; disimpan di data/quizzes/. Dipakai saat user minta kuis latihan.
+---
+
 # Skill: Generate Quiz
 
 Repository: StudyBuddy — AI Personal Learning Agent

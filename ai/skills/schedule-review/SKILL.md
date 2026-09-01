@@ -1,3 +1,8 @@
+---
+name: schedule-review
+description: Mengelola jadwal spaced repetition dan menampilkan item yang harus direview hari ini (heartbeat); state di data/reviews/.
+---
+
 # Skill: Schedule Review (Spaced Repetition + Heartbeat)
 
 Repository: StudyBuddy — AI Personal Learning Agent

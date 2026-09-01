@@ -1,3 +1,8 @@
+---
+name: generate-summary
+description: Membaca hasil ingest atau teks dan menghasilkan ringkasan terstruktur (poin penting, konsep kunci) ke data/summaries/. Dipakai saat user minta ringkasan materi.
+---
+
 # Skill: Generate Summary
 
 Repository: StudyBuddy — AI Personal Learning Agent
