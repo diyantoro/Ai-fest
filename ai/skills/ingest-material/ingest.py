@@ -1,124 +1,184 @@
 #!/usr/bin/env python3
-"""StudyBuddy - Skill: Ingest Material.
+"""Skill: Ingest Material — StudyBuddy AI Personal Learning Agent.
 
-Membaca bahan belajar mentah (teks / file teks), menormalkannya, lalu
-menyimpan hasil sebagai dokumen JSON terstruktur di data/ingested/.
+Menerima bahan belajar mentah (teks langsung, file .txt/.md/.markdown/.rst,
+atau stdin), menormalkannya, lalu menyimpan hasil sebagai satu dokumen JSON
+di data/ingested/.  Hanya memakai Python standard library.
 
-Hanya menggunakan Python standard library.
+Pemakaian:
+    python3 ingest.py --text "bahan belajar..."
+    python3 ingest.py --file path/to/bahan.md
+    python3 ingest.py --file path/to/bahan.md --title "Judul Kustom"
+    cat bahan.txt | python3 ingest.py
 """
 
 import argparse
 import json
-import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[3] / "data" / "ingested"
+# Agar modul _common (di ai/skills/) bisa diimpor saat script dijalankan langsung.
+if str(Path(__file__).resolve().parents[1]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from _common import DATA_DIR, slugify
+
+INGEST_DIR = DATA_DIR / "ingested"
+
+# Ekstensi file teks yang didukung untuk ingestion.
+TEXT_EXTENSIONS = {".txt", ".md", ".markdown", ".rst"}
 
 
-def slugify(text: str) -> str:
-    """Buat slug aman untuk nama file dari sebuah judul/teks."""
-    text = text.strip().lower()
-    text = re.sub(r"[^a-z0-9]+", "-", text)
-    text = text.strip("-")
-    return text or "document"
+def normalize(text: str) -> str:
+    """Rapikan teks mentah.
 
-
-def normalize(raw: str) -> str:
-    """Normalisasi teks bahan belajar.
-
-    - Trim whitespace per baris.
-    - Buang baris yang hanya spasi/tab.
-    - Gabungkan baris kosong berurutan jadi satu.
+    1. Bersihkan whitespace berlebih di awal/akhir setiap baris.
+    2. Hapus baris yang hanya berisi spasi/tab.
+    3. Gabungkan baris kosong berurutan menjadi satu baris kosong.
     """
-    lines = [line.strip() for line in raw.splitlines()]
-    lines = [line for line in lines if line != ""]
-
-    result: list[str] = []
+    lines = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            lines.append("")
+        else:
+            lines.append(line)
+    normalized = []
     prev_blank = False
     for line in lines:
         if line == "":
             if not prev_blank:
-                result.append("")
+                normalized.append("")
             prev_blank = True
         else:
-            result.append(line)
+            normalized.append(line)
             prev_blank = False
-    return "\n".join(result)
+    return "\n".join(normalized).strip()
 
 
-def read_input(args) -> str:
-    """Baca teks mentah dari --text, --file, atau stdin."""
+def read_text_file(path: Path) -> str:
+    """Baca file teks.
+
+    Tahan BOM (utf-8-sig) dan fallback ke latin-1 bila utf-8 gagal.
+    Cuma menerima ekstensi teks plain; selain itu ditolak dengan jelas.
+    """
+    ext = path.suffix.lower()
+    if ext not in TEXT_EXTENSIONS:
+        raise ValueError(
+            f"Ekstensi tidak didukung: '{ext or '(tanpa ekstensi)'}'. "
+            f"Didukung: {', '.join(sorted(TEXT_EXTENSIONS))}"
+        )
+    for encoding in ("utf-8-sig", "latin-1"):
+        try:
+            return path.read_text(encoding=encoding)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError(f"Tidak dapat membaca file sebagai teks: {path.name}")
+
+
+def detect_title(text: str, fallback: str) -> str:
+    """Tebak judul dari isi: heading markdown '#' dulu, lalu baris pertama."""
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            return line.lstrip("#").strip()[:80] or fallback
+        return line[:80]
+    return fallback
+
+
+def load_source(args) -> tuple[str, str, str | None]:
+    """Kembalikan (text, source_label, title_hint).
+
+    source_label: 'text' | 'file' | 'stdin'
+    title_hint   : judul yang bisa dipakai (nama file / awal teks / None).
+    """
     if args.file:
         path = Path(args.file)
-        if not path.is_file():
+        if not path.exists():
             raise FileNotFoundError(f"File tidak ditemukan: {args.file}")
-        return path.read_text(encoding="utf-8")
+        text = read_text_file(path)
+        return text, "file", path.stem
     if args.text:
-        return args.text
+        return args.text, "text", args.text[:20]
     if not sys.stdin.isatty():
-        return sys.stdin.read()
-    raise ValueError("Tidak ada input. Gunakan --text, --file, atau stdin.")
+        return sys.stdin.read(), "stdin", None
+    raise ValueError("Berikan --text, --file, atau input lewat stdin.")
 
 
-def build_document(raw: str, source: str, title: str, output_dir: Path) -> dict:
-    """Buat struktur dokumen JSON dari teks yang sudah dinormalisasi."""
-    content = normalize(raw)
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Ingest bahan belajar StudyBuddy")
+    parser.add_argument("--text", help="Bahan belajar sebagai teks langsung")
+    parser.add_argument("--file", help="Path file teks (.txt/.md/.markdown/.rst)")
+    parser.add_argument(
+        "--title",
+        default=None,
+        help="Judul dokumen (dipakai untuk slug file). "
+             "Default: judul otomatis dari isi, atau nama file.",
+    )
+    parser.add_argument(
+        "--out-dir",
+        default=str(INGEST_DIR),
+        help=f"Folder output (default: {INGEST_DIR})",
+    )
+    args = parser.parse_args(argv)
+
+    text, source, title_hint = load_source(args)
+    if not text or not text.strip():
+        raise ValueError(
+            "Input kosong. Berikan --text, --file, atau isi lewat stdin."
+        )
+    content = normalize(text)
+
+    if args.title:
+        title = args.title
+    elif source == "file" and title_hint:
+        title = detect_title(content, title_hint)
+    else:
+        title = title_hint or "untitled"
+    slug = slugify(title)
+
+    now = datetime.now(timezone.utc).isoformat()
     words = len(content.split())
-    lines = len([ln for ln in content.splitlines() if ln != ""])
+    chars = len(content)
+    lines = len(content.splitlines())
 
-    doc = {
-        "id": slugify(title),
+    document = {
+        "id": slug,
         "source": source,
-        "title": title if title else slugify(title),
+        "title": title,
         "content": content,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "stats": {"words": words, "chars": len(content), "lines": lines},
+        "created_at": now,
+        "stats": {
+            "words": words,
+            "chars": chars,
+            "lines": lines,
+        },
     }
 
-    out_path = output_dir / f"{doc['id']}.json"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{slug}.json"
     out_path.write_text(
-        json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(document, ensure_ascii=False, indent=2),
+        encoding="utf-8",
     )
-    return doc
 
-
-def parse_args(argv=None):
-    parser = argparse.ArgumentParser(
-        description="StudyBuddy ingest-material: normalisasi bahan belajar."
-    )
-    parser.add_argument("--text", help="Teks bahan belajar langsung.")
-    parser.add_argument("--file", help="Path file .txt / .md untuk diingest.")
-    parser.add_argument("--title", default="", help="Judul dokumen (opsional).")
-    parser.add_argument(
-        "--output-dir",
-        default=str(DEFAULT_OUTPUT_DIR),
-        help="Direktori output dokumen ter-ingest.",
-    )
-    return parser.parse_args(argv)
-
-
-def main(argv=None) -> int:
-    args = parse_args(argv)
-    try:
-        raw = read_input(args)
-        output_dir = Path(args.output_dir)
-        title = args.title or Path(args.file).stem if args.file else args.title
-        doc = build_document(raw, args.file or "stdin", title, output_dir)
-    except (ValueError, FileNotFoundError) as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 1
-
-    out_path = Path(args.output_dir) / f"{doc['id']}.json"
-    print(f"OK  ingest-material -> {out_path}")
-    print(f"    id      : {doc['id']}")
-    print(f"    words   : {doc['stats']['words']}")
-    print(f"    chars   : {doc['stats']['chars']}")
-    print(f"    lines   : {doc['stats']['lines']}")
+    print(json.dumps({
+        "ok": True,
+        "path": str(out_path),
+        "id": slug,
+        "title": title,
+        "stats": document["stats"],
+    }, ensure_ascii=False, indent=2))
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except (FileNotFoundError, ValueError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
