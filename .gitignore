@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# StudyBuddy: data hasil proses skill-skill AI (regenerable)
+data/ingested/
+data/summaries/
+data/quizzes/
+data/grades/
+data/reviews/
