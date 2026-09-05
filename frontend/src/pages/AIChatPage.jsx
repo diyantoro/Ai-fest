@@ -1,23 +1,47 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, User, Bot, CheckCircle2 } from 'lucide-react';
+import { api } from '../services/api';
 
 export function AIChatPage({ onStartQuiz }) {
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      sender: 'agent',
-      text: `Hai! 👋 Materimu sudah berhasil diproses.\n\n📌 **Topik**: Database Management\n\nAku sudah membuat ringkasan, 5 quiz, dan jadwal review.\n\n📅 **Review Pertama**: Besok`,
-      timestamp: '18:30'
-    }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
+  const [topics, setTopics] = useState([]);
+  const [activeTopic, setActiveTopic] = useState(null);
+  const [loading, setLoading] = useState(false);
   const chatEndRef = useRef(null);
+
+  const welcomeFor = (topic) => topic
+    ? `Hai! 👋 Aku StudyBuddy, tutor belajarmu.\n\n📌 **Materi aktif**: ${topic.title}\n\nAku akan menjawab berdasarkan materi ini. Coba ketik "ringkasan" atau "mulai quiz". Ubah materi lewat dropdown di atas jika ingin bertanya tentang topik lain.`
+    : `Hai! 👋 Aku StudyBuddy, tutor belajarmu.\n\nBelum ada materi tersimpan. Upload materi dulu di halaman **Upload Material**, lalu kembali ke sini untuk bertanya.`;
+
+  useEffect(() => {
+    api.getTopics().then(list => {
+      setTopics(list);
+      setActiveTopic(list[0] || null);
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setMessages([{ id: Date.now(), sender: 'agent', text: welcomeFor(list[0] || null), timestamp: time }]);
+    });
+  }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = (textToSend) => {
+  const handleSwitchTopic = (topicId) => {
+    const topic = topics.find(t => t.id === topicId) || null;
+    setActiveTopic(topic);
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setMessages(prev => [...prev, {
+      id: Date.now(),
+      sender: 'agent',
+      text: topic
+        ? `Oke, mulai sekarang aku akan menjawab berdasarkan materi **${topic.title}**.`
+        : 'Tidak ada materi yang dipilih.',
+      timestamp: time
+    }]);
+  };
+
+  const handleSend = async (textToSend) => {
     const text = textToSend || inputText;
     if (!text.trim()) return;
 
@@ -30,27 +54,34 @@ export function AIChatPage({ onStartQuiz }) {
 
     setMessages(prev => [...prev, userMsg]);
     if (!textToSend) setInputText('');
+    setLoading(true);
 
-    // Agent response simulation
-    setTimeout(() => {
-      let replyText = 'Aku siap membantumu belajar! Kamu bisa mengetik "Mulai quiz" atau menanyakan poin penting dari materi.';
-      
-      if (text.toLowerCase().includes('mulai quiz') || text.toLowerCase().includes('quiz')) {
-        replyText = `Siap! 📚 Pertanyaan pertama untuk topik **Database Management**:\n\n❓ **Pertanyaan 1/5**\nApa fungsi utama dari Database Management System (DBMS)?\n\nA. Mengelola, menyimpan, dan mengambil data secara terstruktur.\nB. Mempercepat koneksi internet pengguna.\nC. Mengedit file video dan audio.\nD. Membuat tampilan aplikasi web.\n\n*Balas dengan A, B, C, atau D untuk menjawab.*`;
-      } else if (text.toLowerCase().includes('ringkasan') || text.toLowerCase().includes('summary')) {
-        replyText = `📖 **Ringkasan Materi Database Management**:\n\n• DBMS mengelola basis data secara terstruktur dan aman.\n• Fungsi mencakup DDL, DML, DCL, dan Transaksi.\n• ACID menjamin integritas transaksi data.`;
-      } else if (['a', 'b', 'c', 'd'].includes(text.trim().toLowerCase())) {
-        replyText = `✅ **Jawaban kamu BENAR!** (+100 Poin)\n\n💡 *Penjelasan*: DBMS berfungsi mengelola dan menyimpan data secara terstruktur.\n\nLanjut ke pertanyaan berikutnya?`;
+    const targetTopic = activeTopic;
+    try {
+      const res = await api.sendChatMessage(text, targetTopic ? targetTopic.id : undefined);
+      if (textToSend === 'Mulai quiz' && activeTopic) {
+        res.reply = `Siap! 📚 Mari kerjakan quiz **${activeTopic.title}**.`;
       }
-
       const agentMsg = {
         id: Date.now() + 1,
         sender: 'agent',
-        text: replyText,
+        text: res.reply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages(prev => [...prev, agentMsg]);
-    }, 600);
+      if (textToSend === 'Mulai quiz' && activeTopic && onStartQuiz) {
+        setTimeout(() => onStartQuiz(activeTopic), 800);
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        sender: 'agent',
+        text: `Maaf, terjadi kendala: ${err.message}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -58,25 +89,48 @@ export function AIChatPage({ onStartQuiz }) {
       {/* Header Banner */}
       <div className="card" style={{ padding: '1rem 1.5rem', borderRadius: '16px 16px 0 0', borderBottom: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--primary-gradient)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Bot size={22} />
           </div>
           <div>
-            <h3 style={{ fontSize: '1.05rem', color: '#0F172A' }}>StudyBuddy AI Assistant</h3>
-            <div style={{ fontSize: '0.75rem', color: '#10B981', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-              <CheckCircle2 size={12} /> WhatsApp & Telegram Channel
+            <h3 style={{ fontSize: '1.05rem', color: 'var(--text-main)' }}>StudyBuddy AI Assistant</h3>
+            <div style={{ fontSize: '0.75rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+              <CheckCircle2 size={12} /> Terhubung dengan materimu ({topics.length} topik)
             </div>
           </div>
         </div>
+        {topics.length > 0 && (
+          <select
+            value={activeTopic ? activeTopic.id : ''}
+            onChange={e => handleSwitchTopic(e.target.value)}
+            title="Pilih materi aktif"
+            style={{
+              padding: '0.45rem 0.75rem',
+              borderRadius: '10px',
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-card)',
+              color: 'var(--text-main)',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              maxWidth: '220px',
+              outline: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            {topics.map(t => (
+              <option key={t.id} value={t.id}>{t.title}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Chat Messages Container */}
-      <div className="card" style={{ flex: 1, borderRadius: 0, overflowY: 'auto', padding: '1.5rem', background: '#F8FAFC', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div className="card" style={{ flex: 1, borderRadius: 0, overflowY: 'auto', padding: '1.5rem', background: 'var(--bg-card)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {messages.map(msg => {
           const isAgent = msg.sender === 'agent';
           return (
-            <div 
-              key={msg.id} 
+            <div
+              key={msg.id}
               style={{
                 display: 'flex',
                 gap: '0.75rem',
@@ -84,7 +138,7 @@ export function AIChatPage({ onStartQuiz }) {
               }}
             >
               {isAgent && (
-                <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: '#4F46E5', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <Sparkles size={16} />
                 </div>
               )}
@@ -93,10 +147,10 @@ export function AIChatPage({ onStartQuiz }) {
                 maxWidth: '75%',
                 padding: '0.9rem 1.15rem',
                 borderRadius: isAgent ? '4px 18px 18px 18px' : '18px 18px 4px 18px',
-                background: isAgent ? '#FFFFFF' : '#4F46E5',
-                color: isAgent ? '#0F172A' : '#FFFFFF',
-                boxShadow: '0 2px 5px rgba(0,0,0,0.04)',
-                border: isAgent ? '1px solid #E2E8F0' : 'none',
+                background: isAgent ? 'var(--bg-chat-agent, #FFFFFF)' : 'var(--primary)',
+                color: isAgent ? 'var(--text-main)' : 'white',
+                boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
+                border: isAgent ? '1px solid var(--border-color)' : 'none',
                 whiteSpace: 'pre-line',
                 fontSize: '0.92rem',
                 lineHeight: 1.6
@@ -108,13 +162,23 @@ export function AIChatPage({ onStartQuiz }) {
               </div>
 
               {!isAgent && (
-                <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: '#CBD5E1', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'var(--pill-bg)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <User size={16} />
                 </div>
               )}
             </div>
           );
         })}
+        {loading && (
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-start' }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Sparkles size={16} />
+            </div>
+            <div className="card" style={{ padding: '0.9rem 1.15rem', borderRadius: '4px 18px 18px 18px', background: 'var(--bg-card)' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Mengetik...</span>
+            </div>
+          </div>
+        )}
         <div ref={chatEndRef} />
       </div>
 
@@ -122,22 +186,19 @@ export function AIChatPage({ onStartQuiz }) {
       <div className="card" style={{ padding: '1rem 1.5rem', borderRadius: '0 0 16px 16px', borderTop: 'none', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {/* Quick Suggestion Pills */}
         <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto' }}>
-          <button onClick={() => handleSend('Mulai quiz')} style={{ padding: '0.35rem 0.85rem', borderRadius: '999px', background: '#EEF2FF', color: '#4F46E5', fontSize: '0.8rem', fontWeight: 600 }}>
+          <button onClick={() => handleSend('Mulai quiz')} style={{ padding: '0.35rem 0.85rem', borderRadius: '999px', background: 'var(--pill-bg)', color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 600 }}>
             ⚡ Mulai quiz
           </button>
-          <button onClick={() => handleSend('Lihat ringkasan')} style={{ padding: '0.35rem 0.85rem', borderRadius: '999px', background: '#F1F5F9', color: '#475569', fontSize: '0.8rem', fontWeight: 600 }}>
+          <button onClick={() => handleSend('Lihat ringkasan')} style={{ padding: '0.35rem 0.85rem', borderRadius: '999px', background: 'var(--pill-bg)', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600 }}>
             📖 Lihat ringkasan
-          </button>
-          <button onClick={() => handleSend('A')} style={{ padding: '0.35rem 0.85rem', borderRadius: '999px', background: '#F1F5F9', color: '#475569', fontSize: '0.8rem', fontWeight: 600 }}>
-            Jawab: A
           </button>
         </div>
 
         {/* Input Controls */}
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <input 
-            type="text" 
-            placeholder="Ketik pesan atau jawaban..." 
+          <input
+            type="text"
+            placeholder="Tanya apa pun tentang materimu..."
             value={inputText}
             onChange={e => setInputText(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSend()}
@@ -145,12 +206,14 @@ export function AIChatPage({ onStartQuiz }) {
               flex: 1,
               padding: '0.75rem 1rem',
               borderRadius: '12px',
-              border: '1px solid #CBD5E1',
+              border: '1px solid var(--border-color)',
               fontSize: '0.95rem',
-              outline: 'none'
+              outline: 'none',
+              background: 'var(--bg-card)',
+              color: 'var(--text-main)'
             }}
           />
-          <button onClick={() => handleSend()} className="btn-primary" style={{ padding: '0.75rem 1.25rem', borderRadius: '12px' }}>
+          <button onClick={() => handleSend()} disabled={loading} className="btn-primary" style={{ padding: '0.75rem 1.25rem', borderRadius: '12px' }}>
             <Send size={18} />
           </button>
         </div>

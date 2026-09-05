@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS topics (
     title TEXT NOT NULL,
     raw_text TEXT NOT NULL,
     summary TEXT NOT NULL,
+    key_points TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );

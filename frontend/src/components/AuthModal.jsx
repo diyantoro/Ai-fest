@@ -19,11 +19,11 @@ export function AuthModal({ isOpen, onClose, onLoginSuccess }) {
       return;
     }
     setLoading(true);
-    setStatusMsg('Menghubungkan ke Supabase Auth...');
+    setStatusMsg('Menghubungkan ke StudyBuddy...');
 
     try {
       const loggedUser = await api.loginWithEmail(email, password, name);
-      setStatusMsg('✓ Akun berhasil disinkronkan ke tabel users!');
+      setStatusMsg('✓ Akun berhasil dibuat untuk sesi belajar!');
       await new Promise(r => setTimeout(r, 400));
       onLoginSuccess(loggedUser);
       onClose();
@@ -36,7 +36,7 @@ export function AuthModal({ isOpen, onClose, onLoginSuccess }) {
 
   const handleGuest = async () => {
     setLoading(true);
-    setStatusMsg('Membuat sesi tamu di Supabase...');
+    setStatusMsg('Membuat sesi tamu...');
     const guestUser = await api.createGuestSession();
     setStatusMsg('✓ Sesi Tamu aktif!');
     await new Promise(r => setTimeout(r, 300));
@@ -282,7 +282,7 @@ export function AuthModal({ isOpen, onClose, onLoginSuccess }) {
         {/* Security Note */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginTop: '1.25rem', fontSize: '0.75rem', color: 'var(--text-light)' }}>
           <ShieldCheck size={14} color="var(--success)" />
-          <span>Tersambung langsung ke Supabase Cloud Users Table.</span>
+          <span>Data belajar tersimpan aman di backend StudyBuddy.</span>
         </div>
       </div>
     </div>

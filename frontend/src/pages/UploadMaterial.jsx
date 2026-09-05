@@ -5,6 +5,7 @@ export function UploadMaterial({ onProcessComplete }) {
   const [title, setTitle] = useState('');
   const [textInput, setTextInput] = useState('');
   const [fileName, setFileName] = useState(null);
+  const [pdfBase64, setPdfBase64] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [step, setStep] = useState(0);
 
@@ -12,9 +13,13 @@ export function UploadMaterial({ onProcessComplete }) {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setFileName(file.name);
+      setPdfBase64(null);
       if (!title) {
         setTitle(file.name.replace(/\.[^/.]+$/, ""));
       }
+      const reader = new FileReader();
+      reader.onload = () => setPdfBase64(reader.result);
+      reader.readAsDataURL(file);
     }
   };
 
@@ -46,8 +51,12 @@ export function UploadMaterial({ onProcessComplete }) {
     // Step 4: Schedule review
     await new Promise(r => setTimeout(r, 600));
 
-    const contentToUse = textInput.trim() || `Materi ${title} berisi konsep dasar, definisi kunci, dan struktur pembahasan penting.`;
-    await onProcessComplete(title, contentToUse);
+    const contentToUse = pdfBase64 || textInput.trim();
+    const contentType = pdfBase64 ? 'pdf' : 'text';
+    if (!contentToUse) {
+      return;
+    }
+    await onProcessComplete(title, contentToUse, contentType);
   };
 
   return (

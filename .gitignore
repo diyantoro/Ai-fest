@@ -21,4 +21,4 @@ data/ingested/
 data/summaries/
 data/quizzes/
 data/grades/
-data/reviews/
+data/reviews/data/test_*.sqlite

@@ -52,8 +52,8 @@ export function App() {
     localStorage.setItem('studybuddy_user', JSON.stringify(loggedUser));
   };
 
-  const handleProcessMaterial = async (title, content) => {
-    const newTopic = await api.ingestMaterial(title, content);
+  const handleProcessMaterial = async (title, content, type = 'text') => {
+    const newTopic = await api.ingestMaterial(title, content, type);
     await loadData();
     setSelectedTopic(newTopic);
     setActivePage('detail');

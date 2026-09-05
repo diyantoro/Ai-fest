@@ -11,7 +11,7 @@
     "build": "npm --prefix frontend run build",
     "demo": "node src/demo.js",
     "heartbeat": "node src/heartbeat/cron_runner.js",
-    "test": "node --test tests/*.test.js"
+    "test": "DATABASE_PATH=./data/test_studybuddy.sqlite node --test tests/*.test.js"
   },
   "keywords": [
     "ai",

@@ -1,7 +1,7 @@
 import { describe, it, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { initDb, dbQuery } from '../src/db/client.js';
+import { initDb, dbQuery, DB_PATH } from '../src/db/client.js';
 import { generateTopicSlugId, ingestMaterial } from '../src/skills/ingest_material.js';
 import { generateSummarySkill } from '../src/skills/generate_summary.js';
 import { generateQuizSkill, validateQuizQuestion } from '../src/skills/generate_quiz.js';
@@ -13,6 +13,12 @@ import { defaultAIProvider } from '../src/services/ai_provider.js';
 
 describe('StudyBuddy AI Agent (OpenClaw) Test Suite', () => {
   before(async () => {
+    // Safety: guarantee tests only ever touch the isolated test DB, never the live one.
+    // Must point at test DB via DATABASE_PATH env at process start (see package.json test script).
+    assert.ok(
+      DB_PATH.includes('test_studybuddy.sqlite'),
+      `Test suite must run against the test database, but connected to: ${DB_PATH}`
+    );
     process.env.DATABASE_PATH = './data/test_studybuddy.sqlite';
     await initDb();
   });

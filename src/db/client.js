@@ -16,6 +16,8 @@ const dbPath = process.env.DATABASE_PATH
 
 const db = new sqlite3.Database(dbPath);
 
+export const DB_PATH = dbPath;
+
 export const dbQuery = {
   run(sql, params = []) {
     return new Promise((resolve, reject) => {
@@ -54,6 +56,13 @@ export async function initDb() {
 
   for (const stmt of statements) {
     await dbQuery.run(stmt);
+  }
+
+  // Lightweight migrations for pre-existing databases
+  try {
+    await dbQuery.run('ALTER TABLE topics ADD COLUMN key_points TEXT');
+  } catch (e) {
+    // Column already exists -> ignore
   }
 }
 
