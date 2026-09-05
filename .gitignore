@@ -1,3 +1,16 @@
+# Node dependencies
+node_modules/
+frontend/node_modules/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
 # Python
 __pycache__/
 *.py[cod]

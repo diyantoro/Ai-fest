@@ -1,0 +1,36 @@
+{
+  "name": "studybuddy-openclaw",
+  "version": "1.0.0",
+  "description": "StudyBuddy - Personal Learning AI Agent based on OpenClaw",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "server": "node src/server.js",
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "demo": "node src/demo.js",
+    "heartbeat": "node src/heartbeat/cron_runner.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "keywords": [
+    "ai",
+    "openclaw",
+    "spaced-repetition",
+    "studybuddy",
+    "telegram",
+    "whatsapp",
+    "supabase"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "pdf-parse": "^1.1.1",
+    "sqlite3": "^5.1.7",
+    "telegraf": "^4.16.3"
+  }
+}
